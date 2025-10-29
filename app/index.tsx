@@ -8,8 +8,15 @@ import SegmentedControl from "@react-native-segmented-control/segmented-control"
 import { GlassView } from "expo-glass-effect";
 import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import React, {
+    ReactElement,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from "react";
+import { Pressable, Text, View } from "react-native";
+import { FlatList } from "react-native-gesture-handler";
 import MapView, { Marker } from "react-native-maps";
 import { FQHCSite } from "./types";
 
@@ -34,7 +41,7 @@ export default function Map() {
     const themeBack = useThemeColor({}, "background");
     const themeText = useThemeColor({}, "text");
 
-    // --- Utility: Haversine distance in km
+    //Distance is KM!
     function haversineDistance(
         lat1: number,
         lon1: number,
@@ -88,28 +95,40 @@ export default function Map() {
                     searchRadius
             )
             .sort((a, b) => a.distance - b.distance);
-        console.log("filtered lenght: " + filteredCenters.length)
-        setNearbyCenters(filteredCenters)
+        console.log("filtered lenght: " + filteredCenters.length);
+        setNearbyCenters(filteredCenters);
     };
 
     const searchCenters = (centerOptions: FQHCSite[]) => {
         setSearchingCenters(true);
-        const filteredCenters = centerOptions.filter((val) => {
-            const address = `${val["Site Address"]}, ${val["Site City"]}, ${val["Site State Abbreviation"]} ${val["Site Postal Code"]}`
-            const lowerSearch = searchValue.toLowerCase()
-            return address.toLowerCase().includes(lowerSearch) || val["Site Name"].toLowerCase().includes(lowerSearch)
+        const filteredCenters = centerOptions
+            .filter((val) => {
+                const address = `${val["Site Address"]}, ${val["Site City"]}, ${val["Site State Abbreviation"]} ${val["Site Postal Code"]}`;
+                const lowerSearch = searchValue.toLowerCase();
+                return (
+                    address.toLowerCase().includes(lowerSearch) ||
+                    val["Site Name"].toLowerCase().includes(lowerSearch)
+                );
+            })
+            .sort((a, b) => a.distance - b.distance);
+        if (filteredCenters.length > 100) {
+            filteredCenters.length = 100;
         }
-        ).sort((a, b) => a.distance - b.distance)
-        if(filteredCenters.length > 100) { filteredCenters.length = 100 }
         setSearchingCenters(false);
-        return filteredCenters
-    }
+        return filteredCenters;
+    };
 
     useEffect(() => {
-        if(allCenters.length > 0) {
-            searchValue === "" ? setDisplayCenters(nearbyCenters) : setDisplayCenters(searchCenters(searchArea === "Nearby" ? nearbyCenters : allCenters))
+        if (allCenters.length > 0) {
+            searchValue === ""
+                ? setDisplayCenters(nearbyCenters)
+                : setDisplayCenters(
+                      searchCenters(
+                          searchArea === "Nearby" ? nearbyCenters : allCenters
+                      )
+                  );
         }
-    }, [searchValue, nearbyCenters])
+    }, [searchValue, nearbyCenters, searchArea]);
 
     useEffect(() => {
         if (allCenters.length > 0) {
@@ -223,7 +242,13 @@ export default function Map() {
                 searchValue={searchValue}
                 setSearchValue={setSearchValue}
                 searchContent={
-                    <SearchResults themeBack={themeBack} themeText={themeText} unit={unit} searchingCenters={searchingCenters} displayCenters={displayCenters} />
+                    <SearchResults
+                        themeBack={themeBack}
+                        themeText={themeText}
+                        unit={unit}
+                        searchingCenters={searchingCenters}
+                        displayCenters={displayCenters}
+                    />
                 }
                 searchActiveCotent={
                     <View
@@ -275,58 +300,58 @@ export default function Map() {
 }
 
 interface SearchResultsProps {
-    searchingCenters: boolean,
-    themeText: string,
-    themeBack: string,
-    unit: string
-    displayCenters: FQHCSite[]
+    searchingCenters: boolean;
+    themeText: string;
+    themeBack: string;
+    unit: string;
+    displayCenters: FQHCSite[];
+    header?: ReactElement;
+    scrollEnabled?: boolean
 }
 
-const SearchResults = (props: SearchResultsProps) => {
+const SearchResults = React.memo((props: SearchResultsProps) => {
     return (
         <>
-            {props.searchingCenters ? (
-                <View
-                    style={{
-                        width: "100%",
-                        height: "100%",
-                        marginTop: 10,
-                        alignItems: "center",
-                        justifyContent: "center",
-                    }}
-                >
-                    <ActivityIndicator color={props.themeText} />
-                </View>
-            ) : props.displayCenters.length > 0 ? (
-                props.displayCenters.map((center) => (
-                    <CenterInfoSearch
-                        textColor={props.themeText}
-                        color={props.themeBack}
-                        key={center["BPHC Assigned Number"]}
-                        site={center}
-                        unit={props.unit === "Imperial" ? "mi" : "km"}
-                    />
-                ))
-            ) : (
-                <View
-                    style={{
-                        width: "100%",
-                        height: "100%",
-                        marginTop: 10,
-                        alignItems: "center",
-                        justifyContent: "center",
-                    }}
-                >
-                    <Text
+            <FlatList
+                contentContainerStyle={{ paddingBottom: 64 }}
+                data={props.displayCenters}
+                ListHeaderComponent={props.header}
+                removeClippedSubviews
+                initialNumToRender={15}
+                maxToRenderPerBatch={15}
+                scrollEnabled={props.scrollEnabled}
+                ListEmptyComponent={
+                    <View
                         style={{
-                            color: props.themeText,
-                            fontWeight: "bold",
+                            width: "100%",
+                            height: "100%",
+                            marginTop: 10,
+                            alignItems: "center",
+                            justifyContent: "center",
                         }}
                     >
-                        No Centers within Search Area
-                    </Text>
-                </View>
-            )}
+                        <Text
+                            style={{
+                                color: props.themeText,
+                                fontWeight: "bold",
+                            }}
+                        >
+                            No Centers within Search Area
+                        </Text>
+                    </View>
+                }
+                renderItem={(val) => {
+                    return (
+                        <CenterInfoSearch
+                            textColor={props.themeText}
+                            color={props.themeBack}
+                            key={val.item["BPHC Assigned Number"]}
+                            site={val.item}
+                            unit={props.unit === "Imperial" ? "mi" : "km"}
+                        />
+                    );
+                }}
+            />
         </>
-    )
-}
+    );
+});
