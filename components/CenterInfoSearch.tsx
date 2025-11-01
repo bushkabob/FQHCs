@@ -14,9 +14,10 @@ interface CenterInfoSearchProps {
     color: string;
     textColor: string;
     unit: string;
+    onClick: Function
 }
 
-function SiteCard({ site, color, textColor, unit }: CenterInfoSearchProps) {
+function SiteCard({ site, color, textColor, unit, onClick }: CenterInfoSearchProps) {
     const router = useRouter();
     const scale = useSharedValue(1);
 
@@ -26,15 +27,7 @@ function SiteCard({ site, color, textColor, unit }: CenterInfoSearchProps) {
 
     return (
         <Pressable
-            onPress={() => {
-                router.push({
-                    pathname: "/details",
-                    params: {
-                        id: site["BPHC Assigned Number"],
-                        name: site["Site Name"],
-                    },
-                });
-            }}
+            onPress={()=>onClick()}
             onPressIn={() => {
                 scale.value = withSpring(1.05, { duration: 0.9, dampingRatio: 1 });
             }}

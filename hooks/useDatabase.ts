@@ -22,7 +22,10 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
             const asset = Asset.fromModule(
                 require(`../assets/database/${DB_NAME}`)
             );
-            await asset.downloadAsync();
+            await asset.downloadAsync().catch((err) => {
+                console.error("Failed to download DB asset:", err);
+                throw err;
+            });
 
             // Destination: app's document directory
             const dbFile = new File(Paths.document, DB_NAME);
@@ -59,7 +62,9 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
 }
 
 export default function useDatabase() {
-    const [db, setDb] = useState<SQLite.SQLiteDatabase | undefined>(databaseInstance);
+    const [db, setDb] = useState<SQLite.SQLiteDatabase | undefined>(
+        databaseInstance
+    );
     const [loading, setLoading] = useState(db === undefined);
 
     useEffect(() => {
@@ -70,7 +75,6 @@ export default function useDatabase() {
             })
             .catch((error) => {
                 console.error("Error setting up database:", error);
-                setLoading(false);
             });
     }, []);
 

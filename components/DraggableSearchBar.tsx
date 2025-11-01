@@ -10,22 +10,22 @@ import {
     Keyboard,
     Pressable,
     StyleSheet,
-    View,
+    View
 } from "react-native";
 import {
     Gesture,
     GestureDetector,
-    GestureHandlerRootView,
-    TextInput,
+    TextInput
 } from "react-native-gesture-handler";
 import Animated, {
     Extrapolate,
     interpolate,
     runOnJS,
+    useAnimatedScrollHandler,
     useAnimatedStyle,
     useSharedValue,
     withSpring,
-    withTiming,
+    withTiming
 } from "react-native-reanimated";
 
 import { BlurView } from "expo-blur";
@@ -47,50 +47,47 @@ const DraggableSearchBar: React.FC<Props> = ({
 }) => {
     const themeBack = useThemeColor({}, "background");
     const themeText = useThemeColor({}, "text");
+
     const { height } = Dimensions.get("window");
 
     const MIN_HEIGHT = 82;
     const MAX_HEIGHT = height - Constants.statusBarHeight;
-
     const SNAP_TOP = 0 + Constants.statusBarHeight;
-
     const BOTTOM_OFFSET = 5;
-
     const SNAP_BOTTOM = height - MIN_HEIGHT - BOTTOM_OFFSET;
 
-    console.log("Desired Bottom: ", height - MIN_HEIGHT);
-    console.log("Top: ", SNAP_TOP);
-    console.log("Bottom: ", SNAP_BOTTOM);
-
     const translateY = useSharedValue(SNAP_BOTTOM);
+    const scrollY = useSharedValue(0)
     const [focused, setFocused] = useState(false);
     const textInputRef = useRef<TextInput>(null);
 
     const dismissKeyboard = () => Keyboard.dismiss();
 
-    // === Gesture ======================================================
+    // const intensity = useSharedValue(0)
+
+    //Gesture Handler
     const pan = Gesture.Pan()
         .onBegin(() => runOnJS(dismissKeyboard)())
         .onChange((e) => {
             const newY = translateY.value + e.changeY;
             translateY.value = Math.min(Math.max(newY, SNAP_TOP), SNAP_BOTTOM);
         })
-        .onEnd(() => {
-            const midpoint = (SNAP_BOTTOM - SNAP_TOP) / 2;
-            const target = translateY.value < midpoint ? SNAP_TOP : SNAP_BOTTOM;
-            translateY.value = withTiming(target, { duration: 200 });
+        .onEnd((e) => {
+            if(Math.abs(e.velocityY) > 2500){
+                const target = e.velocityY < 0 ? SNAP_TOP : SNAP_BOTTOM;
+                translateY.value = withTiming(target, { duration: 200 })
+            } else {
+                const midpoint = (SNAP_BOTTOM - SNAP_TOP) / 2;
+                const target = translateY.value < midpoint ? SNAP_TOP : SNAP_BOTTOM;
+                translateY.value = withTiming(target, { duration: 200 });
+            }
         });
 
-    // === Animations ===================================================
+    //Main sheet
     const sheetStyle = useAnimatedStyle(() => {
         // progress: 0 = closed, 1 = fully open
         const progress =
             1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
-        console.log("Translate: " + translateY.value);
-        console.log("Snap Bottom: " + SNAP_BOTTOM);
-        console.log("Snap top: " + SNAP_TOP);
-        console.log("SB - ST: " + (SNAP_BOTTOM - SNAP_TOP));
-        console.log("Progress: " + progress);
         const scale = interpolate(
             progress,
             [0, 1],
@@ -100,11 +97,12 @@ const DraggableSearchBar: React.FC<Props> = ({
         const translateYInter = translateY.value;
 
         return {
-            transform: [{ translateY: translateYInter }, {scale: scale}],
+            transform: [{ translateY: translateYInter }, { scale: scale }],
             transformOrigin: "top",
         };
     });
 
+    //Mask
     const mask = useAnimatedStyle(() => {
         const progress =
             1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
@@ -117,47 +115,78 @@ const DraggableSearchBar: React.FC<Props> = ({
         );
         const translateYInter = translateY.value;
 
-        const height =
-            interpolate(progress, [0, 1], [MIN_HEIGHT * scale, MAX_HEIGHT * scale], Extrapolate.CLAMP);
+        const height = interpolate(
+            progress,
+            [0, 1],
+            [MIN_HEIGHT * scale, MAX_HEIGHT * scale],
+            Extrapolate.CLAMP
+        );
 
         return {
-            transform: [{ translateY: translateYInter }, {scale: scale}],
+            transform: [{ translateY: translateYInter }, { scale: scale }],
             transformOrigin: "top",
             height,
         };
     });
 
+    //Function buttons
     const childFade = useAnimatedStyle(() => {
-		const progress =
+        const progress =
             1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
-		const opacity = interpolate(
-				translateY.value,
-				[SNAP_BOTTOM * 0.5, SNAP_BOTTOM * 0.3],
-				[1, 0],
-				Extrapolate.CLAMP
-		)
-		const scale = interpolate(
+        const opacity = interpolate(
+            translateY.value,
+            [SNAP_BOTTOM * 0.5, SNAP_BOTTOM * 0.3],
+            [1, 0],
+            Extrapolate.CLAMP
+        );
+        const scale = interpolate(
             progress,
             [0, 1],
             [0.94, 1],
             Extrapolate.CLAMP
         );
-		const translateYInter = translateY.value - BOTTOM_OFFSET - 100 - 10;
-		
+        const translateYInter = translateY.value - BOTTOM_OFFSET - 150 - 10;
+        return {
+            transform: [{ translateY: translateYInter }, { scale: scale }],
+            opacity: opacity,
+            transformOrigin: "top",
+        };
+    });
 
-		return {
-			transform: [{ translateY: translateYInter }, {scale: scale}],
-			opacity: opacity,
-			transformOrigin: "top"
-		}
-});
+    //Blur functions
+    const blurView = useAnimatedStyle(() => {
+        const opacity = interpolate(
+            scrollY.value,
+            [-82, -50],
+            [0, 1],
+            Extrapolate.CLAMP
+        );
+        return {
+            opacity,
+        };
+    });
 
-    // === Render ======================================================
+    const childScrollHandler = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            scrollY.value = event.contentOffset.y
+        }
+    })
+
+    const minimizeScroll = () => {
+        translateY.value = withTiming(SNAP_BOTTOM, { duration: 200 })
+    }
+
+    //Render
     return (
         <>
-			<Animated.View
+            <Animated.View
                 style={[
-                    { position: "absolute", top: 0, right: 0, marginHorizontal: 10 },
+                    {
+                        position: "absolute",
+                        top: 0,
+                        right: 0,
+                        marginHorizontal: 10,
+                    },
                     childFade,
                 ]}
             >
@@ -165,9 +194,12 @@ const DraggableSearchBar: React.FC<Props> = ({
             </Animated.View>
             {/* Floating controls / children */}
             <MaskedView
-                style={{ height: "100%", width: "100%", position: "absolute", 
-					pointerEvents: "box-none"
-				}}
+                style={{
+                    height: "100%",
+                    width: "100%",
+                    position: "absolute",
+                    pointerEvents: "box-none",
+                }}
                 maskElement={
                     <Animated.View
                         style={[
@@ -178,13 +210,6 @@ const DraggableSearchBar: React.FC<Props> = ({
                     />
                 }
             >
-                <GestureHandlerRootView
-                    style={{
-                        width: "100%",
-                        height: "100%",
-                        position: "absolute",
-                    }}
-                >
                     <GestureDetector gesture={pan}>
                         <Animated.View
                             style={[
@@ -193,21 +218,31 @@ const DraggableSearchBar: React.FC<Props> = ({
                                 sheetStyle,
                             ]}
                         >
-                            {/* Static blur background */}
-                            {/* <BlurView
-                                intensity={80}
-                                tint="default"
-                                style={[
-                                    StyleSheet.absoluteFill,
-                                ]}
-                            /> */}
-
                             {/* Content */}
                             <GlassView style={styles.glass}>
                                 {/* Handle */}
-                                <BlurView style={styles.header} >
+                                <View style={[styles.header]}>
+                                    <Animated.View
+                                        style={[
+                                            {
+                                                position: "absolute",
+                                                top: 0,
+                                                left: 0,
+                                                bottom: 0,
+                                                right: 0,
+                                            },
+                                            blurView,
+                                        ]}
+                                    >
+                                        <BlurView
+                                            style={{
+                                                height: "100%",
+                                                width: "100%",
+                                            }}
+                                            intensity={100}
+                                        />
+                                    </Animated.View>
                                     <View style={styles.handle} />
-
                                     {/* Search Row */}
                                     <View style={styles.row}>
                                         <Pressable
@@ -231,12 +266,18 @@ const DraggableSearchBar: React.FC<Props> = ({
                                                     onFocus={() => {
                                                         setFocused(true);
                                                         translateY.value =
-                                                            withSpring(SNAP_TOP);
+                                                            withSpring(
+                                                                SNAP_TOP
+                                                            );
                                                     }}
                                                     value={searchValue}
-                                                    onChangeText={setSearchValue}
+                                                    onChangeText={
+                                                        setSearchValue
+                                                    }
                                                     placeholder="Search FQHCs"
-                                                    placeholderTextColor={themeText}
+                                                    placeholderTextColor={
+                                                        themeText
+                                                    }
                                                     style={{
                                                         color: themeText,
                                                         flex: 1,
@@ -266,24 +307,24 @@ const DraggableSearchBar: React.FC<Props> = ({
                                                         name="close"
                                                         size={22}
                                                         color={themeText}
-                                                        styl={{ padding: 20 }}
                                                     />
                                                 </GlassView>
                                             </Pressable>
                                         )}
                                     </View>
-                                </BlurView>
+                                </View>
                                 {/* Scroll / List content */}
                                 <View style={{ height: "100%", width: "100%" }}>
                                     {React.cloneElement(searchContent as any, {
                                         headerOffset: MIN_HEIGHT,
-                                        header: focused && searchActiveCotent, 
+                                        header: focused && searchActiveCotent,
+                                        scrollHandler: childScrollHandler,
+                                        minimizeScroll: minimizeScroll
                                     })}
                                 </View>
                             </GlassView>
                         </Animated.View>
                     </GestureDetector>
-                </GestureHandlerRootView>
             </MaskedView>
         </>
     );
@@ -324,7 +365,7 @@ const styles = StyleSheet.create({
         height: 40,
         paddingHorizontal: 12,
         backgroundColor: "rgba(255,255,255,0.15)",
-        borderRadius: 40
+        borderRadius: 40,
     },
     header: {
         width: "100%",
@@ -332,7 +373,7 @@ const styles = StyleSheet.create({
         position: "absolute",
         top: 0,
         zIndex: 100,
-    }
+    },
 });
 
 export default DraggableSearchBar;

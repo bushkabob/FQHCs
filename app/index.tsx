@@ -10,14 +10,16 @@ import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
 import React, {
     ReactElement,
+    RefObject,
     useEffect,
     useLayoutEffect,
     useRef,
     useState,
 } from "react";
-import { Pressable, Text, View } from "react-native";
-import { FlatList } from "react-native-gesture-handler";
-import MapView, { Marker } from "react-native-maps";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import MapView, { Callout, Marker } from "react-native-maps";
+import Animated, { useAnimatedScrollHandler } from "react-native-reanimated";
 import { FQHCSite } from "./types";
 
 export default function Map() {
@@ -26,17 +28,22 @@ export default function Map() {
     const [allCenters, setAllCenters] = useState<FQHCSite[]>([]);
     const [nearbyCenters, setNearbyCenters] = useState<FQHCSite[]>([]);
     const [displayCenters, setDisplayCenters] = useState<FQHCSite[]>([]);
+    const [currentCenter, setCurrentCenter] = useState<
+        { lat: number; lon: number } | undefined
+    >(undefined);
 
     const [searchValue, setSearchValue] = useState<string>("");
     const [searchArea, setSearchArea] = useState<string>("Nearby");
 
     const [searchRadius, setSearchRadius] = useState<number>(10);
     const [unit, setUnit] = useState<string>("Imperial");
-    const [searchingCenters, setSearchingCenters] = useState<boolean>(true);
+    const [searchingCenters, setSearchingCenters] = useState<boolean>(false);
 
     const { loading, query } = useDatabase();
 
     const mapRef = useRef<MapView>(null);
+    //This works by TS does not like it
+    const markerRefs = useRef<any>({});
 
     const themeBack = useThemeColor({}, "background");
     const themeText = useThemeColor({}, "text");
@@ -95,7 +102,6 @@ export default function Map() {
                     searchRadius
             )
             .sort((a, b) => a.distance - b.distance);
-        console.log("filtered lenght: " + filteredCenters.length);
         setNearbyCenters(filteredCenters);
     };
 
@@ -114,7 +120,7 @@ export default function Map() {
         if (filteredCenters.length > 100) {
             filteredCenters.length = 100;
         }
-        setSearchingCenters(false);
+
         return filteredCenters;
     };
 
@@ -131,16 +137,23 @@ export default function Map() {
     }, [searchValue, nearbyCenters, searchArea]);
 
     useEffect(() => {
-        if (allCenters.length > 0) {
-            setSearchingCenters(true);
-            getCurrentLocation(async (location) => {
-                const lat = location.coords.latitude;
-                const lon = location.coords.longitude;
-                determineNearbyCenters(lat, lon);
-                setSearchingCenters(false);
-            });
-        }
-    }, [searchRadius, unit, allCenters]);
+        !loading && setSearchingCenters(false);
+    }, [displayCenters]);
+
+    useEffect(() => {
+        setSearchingCenters(true);
+        allCenters.length > 0 &&
+            currentCenter !== undefined &&
+            determineNearbyCenters(currentCenter.lat, currentCenter.lon);
+    }, [searchRadius, unit, currentCenter]);
+
+    useEffect(() => {
+        getCurrentLocation(async (location) => {
+            const lat = location.coords.latitude;
+            const lon = location.coords.longitude;
+            setCurrentCenter({ lat: lat, lon: lon });
+        });
+    }, [allCenters]);
 
     const moveToLocation = (location: Location.LocationObject) => {
         if (mapRef.current) {
@@ -154,6 +167,13 @@ export default function Map() {
                 },
                 1000
             );
+            currentCenter !== undefined &&
+                (location.coords.latitude !== currentCenter.lat ||
+                    location.coords.longitude !== currentCenter.lon) &&
+                setCurrentCenter({
+                    lat: location.coords.latitude,
+                    lon: location.coords.longitude,
+                });
         }
     };
 
@@ -199,6 +219,22 @@ export default function Map() {
         }
     };
 
+    const updateCenter = () => {
+        console.log("run");
+        mapRef &&
+            mapRef.current
+                ?.getCamera()
+                .then((val) => {
+                    setCurrentCenter({
+                        lat: val.center.latitude,
+                        lon: val.center.longitude,
+                    });
+                })
+                .catch((err) => {
+                    console.log("Error, " + err);
+                });
+    };
+
     useLayoutEffect(() => {
         getData();
     }, []);
@@ -207,11 +243,13 @@ export default function Map() {
         <View
             style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
+            <GestureHandlerRootView style={{position: "absolute", top: 0, right: 0, left: 0, bottom: 0}}>
+            
             <MapView
                 onPanDrag={() => {
                     locationColor !== "gray" && setLocationColor("gray");
                 }}
-                mapPadding={{ top: 50, bottom: 50, left: 20, right: 20 }}
+                mapPadding={{ top: 0, right: 0, bottom: 50, left: 20 }}
                 ref={mapRef}
                 style={{ width: "100%", height: "100%" }}
                 showsMyLocationButton
@@ -220,6 +258,18 @@ export default function Map() {
                 {displayCenters.map((center) => (
                     <Marker
                         key={center["BPHC Assigned Number"]}
+                        ref={(ref) => {
+                            if (ref) {
+                                //@ts-ignore
+                                markerRefs.current[
+                                    center["BPHC Assigned Number"]
+                                ] = ref;
+                            } else {
+                                delete markerRefs.current[
+                                    center["BPHC Assigned Number"]
+                                ];
+                            }
+                        }}
                         coordinate={{
                             latitude: Number(
                                 center[
@@ -232,9 +282,14 @@ export default function Map() {
                                 ]
                             ),
                         }}
-                        title={center["Site Name"]}
-                        description={center["Site Address"]}
-                    />
+                    >
+                        <Callout>
+                            <View style={{width: 100, height: 100}} >
+                                <Text>{center["Site Name"]}</Text>
+                                <Text>{center["Site Address"]}</Text>
+                            </View>
+                        </Callout>
+                    </Marker>
                 ))}
             </MapView>
 
@@ -246,6 +301,8 @@ export default function Map() {
                         themeBack={themeBack}
                         themeText={themeText}
                         unit={unit}
+                        markerRefs={markerRefs}
+                        mapRef={mapRef}
                         searchingCenters={searchingCenters}
                         displayCenters={displayCenters}
                     />
@@ -281,6 +338,13 @@ export default function Map() {
                         gap: 20,
                     }}
                 >
+                    <Pressable onPress={updateCenter}>
+                        {!searchingCenters && !loading ? (
+                            <Ionicons name="search" size={30} color={"gray"} />
+                        ) : (
+                            <ActivityIndicator size={30} />
+                        )}
+                    </Pressable>
                     <Pressable
                         onPress={() => getCurrentLocation(moveToLocation)}
                     >
@@ -295,6 +359,7 @@ export default function Map() {
                     </Pressable>
                 </GlassView>
             </DraggableSearchBar>
+            </GestureHandlerRootView>
         </View>
     );
 }
@@ -305,24 +370,32 @@ interface SearchResultsProps {
     themeBack: string;
     unit: string;
     displayCenters: FQHCSite[];
+    markerRefs: any;
+    mapRef: RefObject<MapView | null>;
     header?: ReactElement;
-    headerOffset?: number
-    scrollEnabled?: boolean
+    headerOffset?: number;
+    scrollEnabled?: boolean;
+    scrollHandler?: ReturnType<typeof useAnimatedScrollHandler>;
+    minimizeScroll?: Function
 }
 
 const SearchResults = React.memo((props: SearchResultsProps) => {
+    const flatList = useRef<Animated.FlatList>(null)
+
     return (
         <>
-            <FlatList
+            <Animated.FlatList
+                ref={flatList}
                 contentContainerStyle={{ paddingBottom: 64 }}
-                contentInset={{top: props.headerOffset}}
-                scrollIndicatorInsets={{top: props.headerOffset}}
+                contentInset={{ top: props.headerOffset }}
+                scrollIndicatorInsets={{ top: props.headerOffset }}
                 data={props.displayCenters}
                 ListHeaderComponent={props.header}
                 removeClippedSubviews
                 initialNumToRender={15}
                 maxToRenderPerBatch={15}
                 scrollEnabled={props.scrollEnabled}
+                onScroll={props.scrollHandler}
                 ListEmptyComponent={
                     <View
                         style={{
@@ -344,8 +417,31 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
                     </View>
                 }
                 renderItem={(val) => {
+                    const moveToIcon = () => {
+                        props.mapRef.current?.animateToRegion(
+                            {
+                                latitude: Number(
+                                    val.item[
+                                        "Geocoding Artifact Address Primary Y Coordinate"
+                                    ]
+                                ),
+                                longitude: Number(
+                                    val.item[
+                                        "Geocoding Artifact Address Primary X Coordinate"
+                                    ]
+                                ),
+                                latitudeDelta: 0.01,
+                                longitudeDelta: 0.01,
+                            },
+                            1000
+                        );
+                        props.minimizeScroll && props.minimizeScroll()
+                        flatList.current?.scrollToOffset({ animated: true, offset: -1 * (props.headerOffset || 0) });
+                        setTimeout(() => (props.markerRefs.current[val.item["BPHC Assigned Number"]]).showCallout(), 1000)
+                    };
                     return (
                         <CenterInfoSearch
+                            onClick={moveToIcon}
                             textColor={props.themeText}
                             color={props.themeBack}
                             key={val.item["BPHC Assigned Number"]}
