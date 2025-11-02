@@ -2,151 +2,373 @@
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
-import { GlassContainer, GlassView } from "expo-glass-effect";
-import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
-import { Dimensions, Keyboard, Pressable, View } from "react-native";
-import { Gesture, GestureDetector, GestureHandlerRootView, TextInput } from "react-native-gesture-handler";
-import Animated, { Easing, Extrapolate, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { runOnJS } from "react-native-worklets";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import React, { useRef, useState } from "react";
+import {
+    Dimensions,
+    Keyboard,
+    Pressable,
+    StyleSheet,
+    View
+} from "react-native";
+import {
+    Gesture,
+    GestureDetector,
+    TextInput,
+} from "react-native-gesture-handler";
+import Animated, {
+    Extrapolate,
+    Extrapolation,
+    interpolate,
+    runOnJS,
+    useAnimatedScrollHandler,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
+} from "react-native-reanimated";
 
-type DraggableSearchBarProps = {
-	searchContent?: React.ReactNode;
-	children?: React.ReactNode;
-}
+import { BlurView } from "expo-blur";
 
-const DraggableSearchBar: React.FC<DraggableSearchBarProps> = ({children, searchContent}) => {
-	const themeBack = useThemeColor({}, 'background');
-	const themeText = useThemeColor({}, 'text');
+type Props = {
+    searchContent: React.ReactElement;
+    searchActiveCotent?: React.ReactElement;
+    searchValue: string;
+    setSearchValue: (v: string) => void;
+    children?: React.ReactElement;
+};
 
-	const TextInputRef = React.useRef<TextInput>(null);
+const DraggableSearchBar: React.FC<Props> = ({
+    searchContent,
+    searchActiveCotent,
+    searchValue,
+    setSearchValue,
+    children,
+}) => {
+    const themeBack = useThemeColor({}, "background");
+    const themeText = useThemeColor({}, "text");
 
-	const { height, width } = Dimensions.get("window");
-	const maxHeight = height - Constants.statusBarHeight;
+    const { height } = Dimensions.get("window");
 
-	const config = { duration: 500, easing: Easing.bezier(0.5, 0.01, 0, 1),};
+    const MIN_HEIGHT = 82;
+    const MAX_HEIGHT = height - Constants.statusBarHeight;
+    const SNAP_TOP = 0 + Constants.statusBarHeight;
+    const BOTTOM_OFFSET = 5;
+    const SNAP_BOTTOM = height - MIN_HEIGHT - BOTTOM_OFFSET;
 
-	const minHeight = 65;
-	const viewHeight = useSharedValue(minHeight);
+    const translateY = useSharedValue(SNAP_BOTTOM);
+    const scrollY = useSharedValue(0);
+    const [focused, setFocused] = useState(false);
+    const textInputRef = useRef<TextInput>(null);
 
-	function dismissKeyboard () {
-		Keyboard.dismiss();
-	};
+    const dismissKeyboard = () => Keyboard.dismiss();
 
-	const panGesture = Gesture.Pan()
-		.onBegin(() => {
-			runOnJS(dismissKeyboard)();
-		})
-		.onChange((event) => {
-			let newHeight = viewHeight.value + -event.changeY;
-			newHeight = Math.max(minHeight, Math.min(maxHeight, newHeight));
-			viewHeight.value = newHeight;
-		})
-		.onFinalize(() => {
-			const quarterHeight = maxHeight / 4;
-			if (viewHeight.value > quarterHeight * 3) {
-				viewHeight.value = withTiming(maxHeight, config);
-				return;
-			}
-			else if (viewHeight.value > quarterHeight) {
-				viewHeight.value = withTiming(maxHeight/2, config);
-				return;
-			} else {
-				viewHeight.value = withTiming(minHeight, config);
-			}
-		});
+    //Gesture Handler
+    const pan = Gesture.Pan()
+        .onBegin(() => runOnJS(dismissKeyboard)())
+        .onChange((e) => {
+            const newY = translateY.value + e.changeY;
+            translateY.value = Math.min(Math.max(newY, SNAP_TOP), SNAP_BOTTOM);
+        })
+        .onEnd((e) => {
+            if (Math.abs(e.velocityY) > 2500) {
+                const target = e.velocityY < 0 ? SNAP_TOP : SNAP_BOTTOM;
+                translateY.value = withTiming(target, { duration: 200 });
+            } else {
+                const midpoint = (SNAP_BOTTOM - SNAP_TOP) / 2;
+                const target =
+                    translateY.value < midpoint ? SNAP_TOP : SNAP_BOTTOM;
+                translateY.value = withTiming(target, { duration: 200 });
+            }
+        });
 
-	const animatedStyles = useAnimatedStyle(() => {
-		return {
-			height: viewHeight.value,
-			bottom: 20 - 21 * (viewHeight.value - minHeight) / (maxHeight - minHeight),
-			left: 20 - 21 * (viewHeight.value - minHeight) / (maxHeight - minHeight),
-			right: 20 - 21 * (viewHeight.value - minHeight) / (maxHeight - minHeight)
-		};
-	});
+    //Main sheet
+    const sheetStyle = useAnimatedStyle(() => {
+        // progress: 0 = closed, 1 = fully open
+        const progress =
+            1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
+        const scale = interpolate(
+            progress,
+            [0, 1],
+            [0.94, 1],
+            Extrapolate.CLAMP
+        );
+        const translateYInter = translateY.value;
 
-	const animatedChildrenStyles = useAnimatedStyle(() => {
-		return {
-			opacity: interpolate(viewHeight.value, [maxHeight / 2, 3 * maxHeight / 4], [1, 0]),
-			bottom: viewHeight.value + 30 - 21 * (viewHeight.value - minHeight) / (maxHeight - minHeight),
-			left: 20 - 21 * (viewHeight.value - minHeight) / (maxHeight - minHeight),
-			right: 20 - 21 * (viewHeight.value - minHeight) / (maxHeight - minHeight),
-			pointerEvents: viewHeight.value <= maxHeight / 2 ? "box-none" : "none"
-		};
-	});
+        return {
+            transform: [{ translateY: translateYInter }, { scale: scale }],
+            transformOrigin: "top",
+        };
+    });
 
-	const scrollY = useSharedValue(0);
+    //Mask
+    const mask = useAnimatedStyle(() => {
+        const progress =
+            1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
+        // const bottom = interpolate(progress, [0, 1], [BOTTOM_OFFSET, 0]);
+        const scale = interpolate(
+            progress,
+            [0, 1],
+            [0.94, 1],
+            Extrapolate.CLAMP
+        );
+        const translateYInter = translateY.value;
 
-	// Smoothly fade gradient in as content scrolls under glass
-	const gradientAnimatedStyle = useAnimatedStyle(() => {
-		const opacity = interpolate(
-		scrollY.value,
-		[0, 80], // fade range
-		[0, 1],  // 0 = fully hidden, 1 = fully visible
-		Extrapolate.CLAMP
-		);
-		return { opacity: withTiming(opacity, { duration: 180 }) };
-	});
+        const height = interpolate(
+            progress,
+            [0, 1],
+            [MIN_HEIGHT * scale, MAX_HEIGHT * scale],
+            Extrapolation.CLAMP
+        );
 
-	// Scroll event handler
-	const scrollHandler = useAnimatedScrollHandler({
-		onScroll: (event) => {
-		scrollY.value = event.contentOffset.y;
-		},
-	});
+        const radius = interpolate(
+            progress,
+            [0.7,1],
+            [40, 0],
+            Extrapolation.CLAMP
+        )
 
-	return (
-			<>
-				<Animated.View style={[{position: "absolute", marginHorizontal: 10}, animatedChildrenStyles]} >
-					{children}
-				</Animated.View>
-				<GestureHandlerRootView style={{flex: 1, width: "100%"}} >
-					<GestureDetector gesture={panGesture}>
-						<Animated.View style={[{ position: 'absolute', overflow: 'hidden', borderRadius: 40}, animatedStyles]}>
-							<GlassContainer>
-									<GlassView style={{zIndex: 30, width: "100%", alignItems: "center", paddingBottom: 10, height: "100%"}} >
-										<View style={{backgroundColor: "#a5adb0", height: 4, marginHorizontal: 10, marginVertical: 4, borderRadius: 20, width: 50, zIndex: 100}} />
-										<Pressable onPress={()=>TextInputRef.current?.focus()} style={{alignSelf: "stretch", zIndex: 100}} >
-											<GlassView tintColor={themeBack} style={{ flexDirection: "row", alignSelf: "stretch", alignItems: "center", height: 40, marginHorizontal: 10, marginVertical: 2, borderRadius: 80}} >
-												<Ionicons name="search" size={20} color={themeText} style={{ marginLeft: 10, marginRight: 5 }} />
-												<TextInput onFocus={()=>viewHeight.value = withTiming(maxHeight, config)} ref={TextInputRef} placeholder="Search FQHCs" placeholderTextColor={themeText} style={{width: "100%", color: themeText}} />
-											</GlassView>
-										</Pressable>
-										<View style={{top: 0, position: "absolute", height: "100%"}}>
-											<Animated.View
-												style={[
-												{
-													position: "absolute",
-													top: 0,
-													left: 0,
-													right: 0,
-													height: 100,
-													zIndex: 50,
-												},
-												gradientAnimatedStyle,
-												]}
-											>
-												<LinearGradient
-													colors={['rgba(255,255,255,0.8)', 'rgba(255,255,255,0)']}
-													start={{ x: 0.5, y: 0 }}
-													end={{ x: 0.5, y: 1 }}
-													style={{ flex: 1, height: 100 }}
-													/>
-											</Animated.View>
-											<Animated.ScrollView showsVerticalScrollIndicator={false} onScroll={scrollHandler} >
-												<View style={{height: 64}} />
-												{searchContent}
-												<View style={{height: 20}} />
-											</Animated.ScrollView>
-											
-										</View>
-								</GlassView>
-							</GlassContainer>
-						</Animated.View>
-					</GestureDetector>
-				</GestureHandlerRootView>
-			</>
-	)
-}
+        return {
+            height,
+            borderBottomLeftRadius: radius,
+            borderBottomRightRadius: radius,
+        };
+    });
+
+    //Function buttons
+    const childFade = useAnimatedStyle(() => {
+        const progress =
+            1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
+        const opacity = interpolate(
+            translateY.value,
+            [SNAP_BOTTOM * 0.5, SNAP_BOTTOM * 0.3],
+            [1, 0],
+            Extrapolate.CLAMP
+        );
+        const scale = interpolate(
+            progress,
+            [0, 1],
+            [0.94, 1],
+            Extrapolate.CLAMP
+        );
+        const translateYInter = translateY.value - BOTTOM_OFFSET - 150 - 10;
+        return {
+            transform: [{ translateY: translateYInter }, { scale: scale }],
+            opacity: opacity,
+            transformOrigin: "top",
+        };
+    });
+
+    //Blur functions
+    const blurView = useAnimatedStyle(() => {
+        const opacity = interpolate(
+            scrollY.value,
+            [0, 30],
+            [0, 1],
+            Extrapolate.CLAMP
+        );
+        return {
+            opacity,
+        };
+    });
+
+    const childScrollHandler = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            scrollY.value = event.contentOffset.y;
+        },
+    });
+
+    const minimizeScroll = () => {
+        translateY.value = withTiming(SNAP_BOTTOM, { duration: 200 });
+    };
+
+    const flatListRef = useRef<Animated.FlatList>(null)
+
+    //Render
+    return (
+        <>
+            <Animated.View
+                style={[
+                    {
+                        position: "absolute",
+                        top: 0,
+                        right: 0,
+                        marginHorizontal: 10,
+                    },
+                    childFade,
+                ]}
+            >
+                {children}
+            </Animated.View>
+            {/* Floating controls / children */}
+                <Animated.View
+                    style={[
+                        styles.sheet,
+                        { height: MAX_HEIGHT },
+                        sheetStyle,
+                    ]}
+                >
+                    <Animated.View
+                        style={[
+                            isLiquidGlassAvailable() ? { borderRadius: 40, overflow: "hidden"} : { borderRadius: 40, overflow: "hidden", backgroundColor: themeBack},
+                            styles.sheet,
+                            mask,
+                        ]}
+                    >
+                        {/* Content */}
+                        <GlassView style={styles.glass} >
+                            {/* Handle */}
+                            <GestureDetector gesture={pan}>
+                            <View style={[styles.header]}>
+                                <Animated.View
+                                    style={[
+                                        {
+                                            position: "absolute",
+                                            top: 0,
+                                            left: 0,
+                                            bottom: 0,
+                                            right: 0,
+                                        },
+                                        blurView,
+                                    ]}
+                                >
+                                    <BlurView
+                                        style={{
+                                            height: "100%",
+                                            width: "100%",
+                                        }}
+                                        intensity={100}
+                                        experimentalBlurMethod="dimezisBlurView"
+                                    />
+                                </Animated.View>
+                                <View style={styles.handle} />
+                                {/* Search Row */}
+                                <View style={styles.row}>
+                                    <Pressable
+                                        style={{ flex: 1 }}
+                                        onPress={() =>
+                                            textInputRef.current?.focus()
+                                        }
+                                    >
+                                        <GlassView
+                                            tintColor={themeBack}
+                                            style={styles.inputBox}
+                                        >
+                                            <Ionicons
+                                                name="search"
+                                                size={20}
+                                                color={themeText}
+                                                style={{ marginRight: 8 }}
+                                            />
+                                            <TextInput
+                                                ref={textInputRef}
+                                                onFocus={() => {
+                                                    setFocused(true);
+                                                    translateY.value =
+                                                        withSpring(SNAP_TOP);
+                                                }}
+                                                value={searchValue}
+                                                onChangeText={setSearchValue}
+                                                placeholder="Search FQHCs"
+                                                placeholderTextColor={themeText}
+                                                style={{
+                                                    color: themeText,
+                                                    flex: 1,
+                                                }}
+                                            />
+                                        </GlassView>
+                                    </Pressable>
+
+                                    {focused && (
+                                        <Pressable
+                                            onPress={() => {
+                                                setFocused(false);
+                                                setSearchValue("");
+                                                translateY.value =
+                                                    withSpring(SNAP_BOTTOM);
+                                            }}
+                                        >
+                                            <GlassView
+                                                isInteractive
+                                                tintColor={themeBack}
+                                                style={{
+                                                    padding: 8,
+                                                    borderRadius: 100,
+                                                }}
+                                            >
+                                                <Ionicons
+                                                    name="close"
+                                                    size={22}
+                                                    color={themeText}
+                                                />
+                                            </GlassView>
+                                        </Pressable>
+                                    )}
+                                </View>
+                            </View>
+                            </GestureDetector>
+                            {/* Scroll / List content */}
+                            <View style={{ height: "100%", width: "100%" }}>
+                                {React.cloneElement(searchContent as any, {
+                                    headerOffset: MIN_HEIGHT,
+                                    header: focused && searchActiveCotent,
+                                    scrollHandler: childScrollHandler,
+                                    minimizeScroll: minimizeScroll,
+                                    flatListRef: flatListRef
+                                })}
+                            </View>
+                        </GlassView>
+                    </Animated.View>
+                </Animated.View>
+            {/* </MaskedView> */}
+        </>
+    );
+};
+
+const styles = StyleSheet.create({
+    sheet: {
+        position: "absolute",
+        right: 0,
+        left: 0,
+        zIndex: 100,
+    },
+    glass: {
+        flex: 1,
+        alignItems: "center",
+        paddingBottom: 0,
+    },
+
+    handle: {
+        width: 50,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: "rgba(255,255,255,0.5)",
+        marginVertical: 8,
+    },
+
+    row: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 16,
+        marginBottom: 18,
+        gap: 10,
+    },
+
+    inputBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        height: 40,
+        paddingHorizontal: 12,
+        backgroundColor: "rgba(255,255,255,0.15)",
+        borderRadius: 40,
+    },
+    header: {
+        width: "100%",
+        alignItems: "center",
+        position: "absolute",
+        top: 0,
+        zIndex: 100,
+    },
+});
 
 export default DraggableSearchBar;
