@@ -34,7 +34,7 @@ export default function Map() {
     const [allCenters, setAllCenters] = useState<FQHCSite[]>([]);
     const [nearbyCenters, setNearbyCenters] = useState<FQHCSite[]>([]);
     const [displayCenters, setDisplayCenters] = useState<FQHCSite[]>([]);
-    const [displayCities, setDisplayCities] = useState<City[]>([])
+    const [displayCities, setDisplayCities] = useState<City[]>([]);
     const [currentCenter, setCurrentCenter] = useState<
         { lat: number; lon: number } | undefined
     >(undefined);
@@ -53,8 +53,8 @@ export default function Map() {
     const { loading, query } = useDatabase();
 
     const mapRef = useRef<MapView>(null);
-    //This works by TS does not like it
-    const markerRefs = useRef<any>({});
+    // @ts-ignore
+    const markerRefs = useRef<Marker>({});
 
     const themeBack = useThemeColor({}, "background");
     const themeText = useThemeColor({}, "text");
@@ -116,38 +116,43 @@ export default function Map() {
         setNearbyCenters(filteredCenters);
     };
 
-    const searchCities = (query: string, currentCenter: { lat: number, lon: number }) => {
+    const searchCities = (
+        query: string,
+        currentCenter: { lat: number; lon: number }
+    ) => {
         if (!query) return [];
         const q = query.toLowerCase().trim();
         const cityKeys = Object.keys(cities);
         const directMatches: string[] = [];
 
-        // 🔹 Fast substring search first
         for (const key of cityKeys) {
             if (key.toLowerCase().includes(q)) {
-                // console.log(key)
                 directMatches.push(key);
-                // if (directMatches.length >= 15) break; // limit results
+                if (directMatches.length >= 15) break; // limit results
             }
         }
 
-        // ✅ If we found direct matches, return them
+        //Direct matches
         if (directMatches.length > 0) {
-            console.log(directMatches)
             return directMatches.map((key) => ({
-                "name": key
-                .split(",")
-                .map((x) => x.trim().replace(/^\w/, (c) => c.toUpperCase()))
-                .join(", "),
-            "lat": cities[key].lat,
-            "lon": cities[key].lon,
-                distance: haversineDistance(cities[key].lat, cities[key].lon, currentCenter.lat, currentCenter.lon),
+                name: key
+                    .split(",")
+                    .map((x) => x.trim().replace(/^\w/, (c) => c.toUpperCase()))
+                    .join(", "),
+                lat: cities[key].lat,
+                lon: cities[key].lon,
+                distance: haversineDistance(
+                    cities[key].lat,
+                    cities[key].lon,
+                    currentCenter.lat,
+                    currentCenter.lon
+                ),
             }));
         }
 
-        // 🔁 Otherwise, fuzzy fallback on first few hundred keys
+        //Fuzzy fallback
         const fuzzyResults = cityKeys
-            .slice(0, 1000) // limit comparisons for performance
+            .slice(0, 1000)
             .map((k) => ({
                 key: k,
                 dist: levenshtein(k, q),
@@ -156,13 +161,18 @@ export default function Map() {
             .slice(0, 5);
 
         return fuzzyResults.map(({ key }) => ({
-            "name": key
+            name: key
                 .split(",")
                 .map((x) => x.trim().replace(/^\w/, (c) => c.toUpperCase()))
                 .join(", "),
-            "lat": cities[key].lat,
-            "lon": cities[key].lon,
-            distance: haversineDistance(cities[key].lat, cities[key].lon, currentCenter.lat, currentCenter.lon),
+            lat: cities[key].lat,
+            lon: cities[key].lon,
+            distance: haversineDistance(
+                cities[key].lat,
+                cities[key].lon,
+                currentCenter.lat,
+                currentCenter.lon
+            ),
         }));
     };
 
@@ -193,15 +203,22 @@ export default function Map() {
         const handler = setTimeout(() => {
             if (searchValue === "") {
                 setDisplayCenters(nearbyCenters);
-                setDisplayCities([])
+                setDisplayCities([]);
             } else {
                 setDisplayCenters(
                     searchCenters(
                         searchArea === "Nearby" ? nearbyCenters : allCenters
                     )
                 );
-                const lowerSearch = searchValue.toLowerCase()
-                searchArea === "Nearby" ? setDisplayCities([]) : setDisplayCities(searchCities(lowerSearch, { lat: currentCenter?.lat || 0, lon: currentCenter?.lon || 0 }))
+                const lowerSearch = searchValue.toLowerCase();
+                searchArea === "Nearby"
+                    ? setDisplayCities([])
+                    : setDisplayCities(
+                          searchCities(lowerSearch, {
+                              lat: currentCenter?.lat || 0,
+                              lon: currentCenter?.lon || 0,
+                          })
+                      );
             }
         }, 250); // <-- debounce delay (ms)
 
@@ -222,8 +239,8 @@ export default function Map() {
     }, [searchRadius, unit, currentCenter]);
 
     useEffect(() => {
-        setSearchValue("")
-    }, [currentCenter])
+        setSearchValue("");
+    }, [currentCenter]);
 
     //Get nearby centers when map loads
     useEffect(() => {
@@ -549,7 +566,7 @@ interface SearchResultsProps {
     themeBack: string;
     unit: string;
     displayCenters: FQHCSite[];
-    cities: City[]
+    cities: City[];
     markerRefs: any;
     mapRef: RefObject<MapView | null>;
     flatListRef?: RefObject<Animated.FlatList | null>;
@@ -558,11 +575,18 @@ interface SearchResultsProps {
     scrollEnabled?: boolean;
     scrollHandler?: ReturnType<typeof useAnimatedScrollHandler>;
     minimizeScroll?: Function;
-    setCenter: Function
+    setCenter: Function;
 }
 
 const SearchResults = React.memo((props: SearchResultsProps) => {
-    const locales: ({name: string, id: string, distance: number, isCity: false, lon: number, lat: number} | {name: string, id: string, distance: number, isCity: true, lon: number, lat: number})[] = []
+    const locales: ({
+        name: string;
+        id: string;
+        distance: number;
+        isCity: boolean;
+        lon: number;
+        lat: number;
+    })[] = [];
     props.displayCenters.forEach((val) =>
         locales.push({
             name: val["Site Name"],
@@ -570,9 +594,9 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
             distance: val["distance"],
             isCity: false,
             lat: Number(val["Geocoding Artifact Address Primary Y Coordinate"]),
-            lon: Number(val["Geocoding Artifact Address Primary X Coordinate"])
+            lon: Number(val["Geocoding Artifact Address Primary X Coordinate"]),
         })
-    )
+    );
     props.cities.forEach((val) => {
         locales.push({
             name: val.name,
@@ -581,9 +605,9 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
             isCity: true,
             lat: val.lat,
             lon: val.lon,
-        })
-    })
-    locales.sort((a, b)=> a.distance <= b.distance ? -1 : 1)
+        });
+    });
+    locales.sort((a, b) => (a.distance <= b.distance ? -1 : 1));
     return (
         <>
             <Animated.FlatList
@@ -622,7 +646,7 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
                     </View>
                 }
                 renderItem={(val) => {
-                    const delta = val.item.isCity ? 0.1 : 0.01
+                    const delta = val.item.isCity ? 0.1 : 0.01;
                     const moveToIcon = () => {
                         props.mapRef.current?.animateToRegion(
                             {
@@ -638,16 +662,21 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
                             animated: true,
                             offset: -1 * (props.headerOffset || 0),
                         });
-                        
-                        !val.item.isCity ? setTimeout(
-                            () =>
-                                props.markerRefs.current[
-                                    val.item.id
-                                ].showCallout(),
-                            1000
-                        ) : props.setCenter({ lat: val.item.lat, lon: val.item.lon })
+
+                        !val.item.isCity
+                            ? setTimeout(
+                                  () =>
+                                      props.markerRefs.current[
+                                          val.item.id
+                                      ].showCallout(),
+                                  1000
+                              )
+                            : props.setCenter({
+                                  lat: val.item.lat,
+                                  lon: val.item.lon,
+                              });
                     };
-                    console.log(val.item)
+                    console.log(val.item);
                     return (
                         <CenterInfoSearch
                             onClick={moveToIcon}
@@ -656,7 +685,7 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
                             key={val.item.id}
                             distance={val.item.distance}
                             name={val.item.name}
-                            showCityIcon = {val.item.isCity}
+                            showCityIcon={val.item.isCity}
                             unit={props.unit === "Imperial" ? "mi" : "km"}
                         />
                     );
