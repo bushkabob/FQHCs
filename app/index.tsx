@@ -397,7 +397,24 @@ export default function Map() {
                     showsMyLocationButton
                     showsUserLocation
                 >
-                    {displayCenters.map((center) => <CenterMarker key={center["BPHC Assigned Number"]} center={center} />)}
+                    {displayCenters.map((center) => (
+                        <CenterMarker
+                            key={center["BPHC Assigned Number"]}
+                            center={center}
+                            ref={(ref: any) => {
+                                if (ref) {
+                                    //@ts-ignore
+                                    markerRefs.current[
+                                        center["BPHC Assigned Number"]
+                                    ] = ref;
+                                } else {
+                                    delete markerRefs.current[
+                                        center["BPHC Assigned Number"]
+                                    ];
+                                }
+                            }}
+                        />
+                    ))}
                 </MapView>
 
                 <DraggableSearchBar
@@ -505,14 +522,14 @@ interface SearchResultsProps {
 }
 
 const SearchResults = React.memo((props: SearchResultsProps) => {
-    const locales: ({
+    const locales: {
         name: string;
         id: string;
         distance: number;
         isCity: boolean;
         lon: number;
         lat: number;
-    })[] = [];
+    }[] = [];
     props.displayCenters.forEach((val) =>
         locales.push({
             name: val["Site Name"],

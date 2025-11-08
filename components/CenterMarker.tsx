@@ -7,6 +7,7 @@ import { Callout, Marker } from "react-native-maps";
 
 interface CenterMarkerProps {
     center: FQHCSite;
+    ref: any
 }
 
 const CenterMarker = (props: CenterMarkerProps) => {
@@ -14,7 +15,7 @@ const CenterMarker = (props: CenterMarkerProps) => {
     const textColor = useThemeColor({}, "text");
     const router = useRouter();
     return (
-        <Marker coordinate={{ latitude: Number(props.center["Geocoding Artifact Address Primary Y Coordinate"]), longitude: Number(props.center["Geocoding Artifact Address Primary X Coordinate"]) }} >
+        <Marker ref={(ref) => {props.ref(ref)}} coordinate={{ latitude: Number(props.center["Geocoding Artifact Address Primary Y Coordinate"]), longitude: Number(props.center["Geocoding Artifact Address Primary X Coordinate"]) }} >
             <Callout
                 onPress={() => {
                     router.push({

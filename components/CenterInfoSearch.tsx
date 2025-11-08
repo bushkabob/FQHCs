@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { GlassView } from "expo-glass-effect";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
@@ -34,6 +35,8 @@ function SiteCard({
         transform: [{ scale: scale.value }],
     }));
 
+    const AnimatedGlassView = Animated.createAnimatedComponent(GlassView)
+
     return (
         <Pressable
             onPress={() => onClick()}
@@ -47,7 +50,7 @@ function SiteCard({
                 scale.value = withSpring(1, { duration: 0.9, dampingRatio: 1 });
             }}
         >
-            <Animated.View
+            <AnimatedGlassView
                 style={[
                     animatedStyle,
                     {
@@ -126,7 +129,7 @@ function SiteCard({
                         color={textColor}
                     />
                 </View>
-            </Animated.View>
+            </AnimatedGlassView>
         </Pressable>
     );
 }

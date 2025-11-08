@@ -25,7 +25,7 @@ import Animated, {
     useAnimatedStyle,
     useSharedValue,
     withSpring,
-    withTiming,
+    withTiming
 } from "react-native-reanimated";
 
 import { BlurView } from "expo-blur";
@@ -47,6 +47,7 @@ const DraggableSearchBar: React.FC<Props> = ({
 }) => {
     const themeBack = useThemeColor({}, "background");
     const themeText = useThemeColor({}, "text");
+    const background2 = useThemeColor({}, "background2")
 
     const { height } = Dimensions.get("window");
 
@@ -112,12 +113,11 @@ const DraggableSearchBar: React.FC<Props> = ({
             [0.94, 1],
             Extrapolate.CLAMP
         );
-        const translateYInter = translateY.value;
 
         const height = interpolate(
             progress,
-            [0, 1],
-            [MIN_HEIGHT * scale, MAX_HEIGHT * scale],
+            [0, 0.5, 1],
+            [MIN_HEIGHT * scale, MAX_HEIGHT * scale * 0.587, MAX_HEIGHT * scale],
             Extrapolation.CLAMP
         );
 
@@ -184,6 +184,24 @@ const DraggableSearchBar: React.FC<Props> = ({
 
     const flatListRef = useRef<Animated.FlatList>(null)
 
+    const glassViewFade = useAnimatedStyle(() => {
+        const progress =
+            1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
+        const opacity = interpolate(progress, [0.9, 1], [1, 0], Extrapolation.CLAMP)
+        return {
+            opacity: opacity
+        }
+    })
+
+    const backgroundViewFade = useAnimatedStyle(() => {
+        const progress =
+            1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP);
+        const opacity = interpolate(progress, [0.5, 0.9], [0, 1], Extrapolation.CLAMP)
+        return {
+            opacity: opacity
+        }
+    })
+
     //Render
     return (
         <>
@@ -207,6 +225,42 @@ const DraggableSearchBar: React.FC<Props> = ({
                         { height: MAX_HEIGHT },
                         sheetStyle,
                     ]}
+                >   
+                    <Animated.View
+                            style={[
+                                isLiquidGlassAvailable() ? { borderRadius: 40, overflow: "hidden"} : { borderRadius: 40, overflow: "hidden", backgroundColor: themeBack},
+                                styles.sheet,
+                                mask,
+                                glassViewFade
+                            ]}
+                        >
+                        <GlassView style={styles.glass} />
+                    </Animated.View>
+                </Animated.View>
+                <Animated.View
+                    style={[
+                        styles.sheet,
+                        { height: MAX_HEIGHT, opacity: 1 },
+                        sheetStyle,
+                        backgroundViewFade
+                    ]}
+                >   
+                    <Animated.View
+                            style={[
+                                isLiquidGlassAvailable() ? { borderRadius: 40, overflow: "hidden"} : { borderRadius: 40, overflow: "hidden", backgroundColor: themeBack},
+                                styles.sheet,
+                                mask,
+                            ]}
+                        >
+                        <View style={[styles.glass, {backgroundColor: background2}]} />
+                    </Animated.View>
+                </Animated.View>
+                <Animated.View
+                    style={[
+                        styles.sheet,
+                        { height: MAX_HEIGHT },
+                        sheetStyle,
+                    ]}
                 >
                     <Animated.View
                         style={[
@@ -216,7 +270,7 @@ const DraggableSearchBar: React.FC<Props> = ({
                         ]}
                     >
                         {/* Content */}
-                        <GlassView style={styles.glass} >
+                        
                             {/* Handle */}
                             <GestureDetector gesture={pan}>
                             <View style={[styles.header]}>
@@ -317,7 +371,6 @@ const DraggableSearchBar: React.FC<Props> = ({
                                     flatListRef: flatListRef
                                 })}
                             </View>
-                        </GlassView>
                     </Animated.View>
                 </Animated.View>
             {/* </MaskedView> */}
@@ -336,6 +389,7 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: "center",
         paddingBottom: 0,
+        borderRadius:40
     },
 
     handle: {
