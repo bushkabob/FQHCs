@@ -1,10 +1,12 @@
 // FixedDraggableContext.tsx
 import { createContext, useContext } from "react";
-import type { SharedValue } from "react-native-reanimated";
+import type { ScrollHandlerProcessed, SharedValue } from "react-native-reanimated";
 
 type FixedDraggableContextType = {
     progress: SharedValue<number>;
-    snapping: SharedValue<boolean>
+    snapping: SharedValue<boolean>;
+    scrollY: SharedValue<number>;
+    scrollHandler?: ScrollHandlerProcessed<Record<string, unknown>>
 };
 
 const FixedDraggableContext = createContext<FixedDraggableContextType | null>(null);

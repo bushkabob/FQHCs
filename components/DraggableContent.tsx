@@ -5,7 +5,7 @@ import { BlurView } from "expo-blur";
 import React, { RefObject, useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import MapView from "react-native-maps";
-import Animated, { Extrapolation, interpolate, runOnJS, ScrollHandlerProcessed, useAnimatedProps, useAnimatedReaction, useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
+import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedProps, useAnimatedReaction } from "react-native-reanimated";
 import CenterInfoSearch from "./CenterInfoSearch";
 import { DraggableHandle } from "./FixedDraggable";
 import { useFixedDraggable } from "./FixedDraggableContext";
@@ -45,9 +45,7 @@ const DraggableContent = (props: DraggableContentProps) => {
 
     const headerHeight = 82
 
-    const scrollY = useSharedValue(0)
-
-    const { progress, snapping } = useFixedDraggable()
+    const { progress, snapping, scrollY } = useFixedDraggable()
 
     const cancelActiveSearch = () => {
         setSearchActive(false)
@@ -215,16 +213,12 @@ const DraggableContent = (props: DraggableContentProps) => {
         })();
     }, []);
 
+    // const derivedY = useDerivedValue(() => { return props.scrollY?.value })
+
     const animatedIntensity = useAnimatedProps(() => {
         const intensity = interpolate(scrollY.value, [0, 150], [0, 100], Extrapolation.CLAMP)
         return { intensity }
-    })
-
-    const scrollHandler = useAnimatedScrollHandler({
-        onScroll: (event) => {
-            scrollY.value = event.contentOffset.y
-        }
-    }, [])
+    }, [scrollY.value])
 
     return (
         <View style={{ width: "100%", height: "100%", borderRadius: 40 }}>
@@ -249,7 +243,6 @@ const DraggableContent = (props: DraggableContentProps) => {
                 mapRef={props.mapRef} 
                 setCenter={props.setCurrentCenter}
                 headerHeight={searchActive ? headerHeight + 50 : headerHeight}
-                scrollHandler={scrollHandler}
                 minimizeScroll={()=>{props.setViewHeight&&props.setViewHeight(0.0,300)}}
             />
         </View>
@@ -270,11 +263,10 @@ interface SearchResultsProps {
     setCenter: Function;
     headerHeight: number
     minimizeScroll?: Function;
-    scrollHandler: ScrollHandlerProcessed<Record<string, unknown>>
 }
 
 const SearchResults = React.memo((props: SearchResultsProps) => {
-    const { progress, snapping } = useFixedDraggable()
+    const { progress, snapping, scrollHandler } = useFixedDraggable()
 
     const locales: {
         name: string;
@@ -336,7 +328,7 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
                 removeClippedSubviews
                 initialNumToRender={15}
                 maxToRenderPerBatch={15}
-                onScroll={props.scrollHandler}
+                onScroll={scrollHandler}
                 ListEmptyComponent={
                     <View
                         style={{

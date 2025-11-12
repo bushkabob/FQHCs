@@ -18,6 +18,7 @@ import Animated, {
     Extrapolation,
     interpolate,
     runOnJS,
+    useAnimatedScrollHandler,
     useAnimatedStyle,
     useDerivedValue,
     useSharedValue,
@@ -46,6 +47,14 @@ const FixedDraggable: React.FC<FixedDraggableProps> = (props: FixedDraggableProp
     const translateY = useSharedValue(SNAP_BOTTOM);
     const progress = useDerivedValue(() => 1 - (translateY.value - SNAP_TOP) / (SNAP_BOTTOM - SNAP_TOP))
     const snapping = useSharedValue(false)
+
+    const scrollY = useSharedValue(0)
+        
+    const scrollHandler = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            scrollY.value = event.contentOffset.y
+        }
+    }, [])
 
     const dismissKeyboard = () => Keyboard.dismiss();
 
@@ -154,7 +163,7 @@ const FixedDraggable: React.FC<FixedDraggableProps> = (props: FixedDraggableProp
 
     //Render
     return (
-        <FixedDraggableProvider value={{ progress, snapping }}>
+        <FixedDraggableProvider value={{ progress, snapping, scrollY, scrollHandler }}>
             <Animated.View
                 style={[
                     {
@@ -180,7 +189,7 @@ const FixedDraggable: React.FC<FixedDraggableProps> = (props: FixedDraggableProp
                         <Animated.View style={[styles.background, backgroundViewFade, {backgroundColor: background2}]} />
                             <GestureDetector gesture={pan}>
                                 <View style={{width: "100%", height: "100%", alignItems: "center" }} >
-                                    {cloneElement(props.content as any, { setViewHeight: updateHeight })}
+                                    {cloneElement(props.content as any, { setViewHeight: updateHeight, scrollY, scrollHandler })}
                                 </View>
                             </GestureDetector>
                 </Animated.View>

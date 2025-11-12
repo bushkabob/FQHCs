@@ -278,25 +278,6 @@ export default function Map() {
                         />
                     }
                 />
-                {/* <DraggableSearchBar
-                    searchValue={searchValue}
-                    setSearchValue={setSearchValue}
-                    searchContent={
-                        <SearchResults
-                            themeBack={themeBack}
-                            themeText={themeText}
-                            unit={unit}
-                            markerRefs={markerRefs}
-                            mapRef={mapRef}
-                            cities={displayCities}
-                            searchingCenters={searchingCenters}
-                            displayCenters={displayCenters}
-                            setCenter={setCurrentCenter}
-                        />
-                    }
-                >
-                    
-                </DraggableSearchBar> */}
             </GestureHandlerRootView>
         </View>
     );
