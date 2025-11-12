@@ -1,12 +1,13 @@
 import { haversineDistance, levenshtein } from "@/app/utils";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { City, FQHCSite, HeightUpdateFunction, MapCenter } from "@/types/types";
+import { BlurView } from "expo-blur";
 import React, { RefObject, useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
-import MapView, { Marker } from "react-native-maps";
-import Animated, { runOnJS, useAnimatedReaction } from "react-native-reanimated";
-import { useAnimatedScrollHandler } from "react-native-reanimated/lib/typescript/hook/useAnimatedScrollHandler";
+import MapView from "react-native-maps";
+import Animated, { Extrapolation, interpolate, runOnJS, ScrollHandlerProcessed, useAnimatedProps, useAnimatedReaction, useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import CenterInfoSearch from "./CenterInfoSearch";
+import { DraggableHandle } from "./FixedDraggable";
 import { useFixedDraggable } from "./FixedDraggableContext";
 import SearchRow from "./SearchRow";
 
@@ -21,40 +22,43 @@ interface DraggableContentProps {
     setCurrentCenter: Function
     unit: string
     searching: boolean
-    markerRefs: RefObject<typeof Marker>
+    //@ts-ignore
+    markerRefs: RefObject<Record<string, Marker | null>>
     mapRef: RefObject<MapView | null>
 }
 
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView)
+
+
 const DraggableContent = (props: DraggableContentProps) => {
+    useEffect(() => {
+        console.log("remount content")
+    }, [])
+
     const [searchValue, setSearchValue] = useState("");
     const [displayCities, setDisplayCities] = useState<City[]>([]);
     const [searchArea, setSearchArea] = useState<string>("");
+    const [searchActive, setSearchActive] = useState<boolean>(false);
     const [cities, setCities] = useState<{
         [key: string]: { lat: number; lon: number };
     }>({});
 
-      //Blur functions
-        // const blurView = useAnimatedStyle(() => {
-        //     const opacity = interpolate(
-        //         scrollY.value,
-        //         [0, 30],
-        //         [0, 1],
-        //         Extrapolate.CLAMP
-        //     );
-        //     return {
-        //         opacity,
-        //     };
-        // });
-    
-        // const childScrollHandler = useAnimatedScrollHandler({
-        //     onScroll: (event) => {
-        //         scrollY.value = event.contentOffset.y;
-        //     },
-        // });
-    
-        // const minimizeScroll = () => {
-        //     translateY.value = withTiming(SNAP_BOTTOM, { duration: 200 });
-        // };
+    const headerHeight = 82
+
+    const scrollY = useSharedValue(0)
+
+    const { progress, snapping } = useFixedDraggable()
+
+    const cancelActiveSearch = () => {
+        setSearchActive(false)
+    }
+
+    useAnimatedReaction(() => [progress, snapping], (curr, prev) => {
+        if (!prev) { return }
+        if(curr[1].value === false && (curr[0].value as number < 1)){
+            runOnJS(cancelActiveSearch)()
+        }
+    })
 
     const searchCenters = (centerOptions: FQHCSite[]) => {
         props.setSearchingCenters(true);
@@ -211,15 +215,31 @@ const DraggableContent = (props: DraggableContentProps) => {
         })();
     }, []);
 
+    const animatedIntensity = useAnimatedProps(() => {
+        const intensity = interpolate(scrollY.value, [0, 150], [0, 100], Extrapolation.CLAMP)
+        return { intensity }
+    })
+
+    const scrollHandler = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            scrollY.value = event.contentOffset.y
+        }
+    }, [])
+
     return (
         <View style={{ width: "100%", height: "100%", borderRadius: 40 }}>
-            <SearchRow
-                value={searchValue}
-                setValue={setSearchValue}
-                setViewHeight={props.setViewHeight}
-                searchArea={searchArea}
-                setSearchArea={setSearchArea}
-            />
+            <AnimatedBlurView animatedProps={animatedIntensity} style={{ position: "absolute", top: 0, right: 0, left: 0, zIndex: 100, minHeight: headerHeight}} >
+                <DraggableHandle />
+                <SearchRow
+                    searchActive={searchActive}
+                    setSearchActive={setSearchActive}
+                    value={searchValue}
+                    setValue={setSearchValue}
+                    setViewHeight={props.setViewHeight}
+                    searchArea={searchArea}
+                    setSearchArea={setSearchArea}
+                />
+            </AnimatedBlurView>
             <SearchResults 
                 searchingCenters={props.searching} 
                 unit={props.unit} 
@@ -227,7 +247,9 @@ const DraggableContent = (props: DraggableContentProps) => {
                 cities={displayCities} 
                 markerRefs={props.markerRefs} 
                 mapRef={props.mapRef} 
-                setCenter={props.setCurrentCenter}       
+                setCenter={props.setCurrentCenter}
+                headerHeight={searchActive ? headerHeight + 50 : headerHeight}
+                scrollHandler={scrollHandler}
                 minimizeScroll={()=>{props.setViewHeight&&props.setViewHeight(0.0,300)}}
             />
         </View>
@@ -246,8 +268,9 @@ interface SearchResultsProps {
     markerRefs: any;
     mapRef: RefObject<MapView | null>;
     setCenter: Function;
-    scrollHandler?: ReturnType<typeof useAnimatedScrollHandler>;
+    headerHeight: number
     minimizeScroll?: Function;
+    scrollHandler: ScrollHandlerProcessed<Record<string, unknown>>
 }
 
 const SearchResults = React.memo((props: SearchResultsProps) => {
@@ -305,7 +328,9 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
                 ref={flatListRef}
                 contentContainerStyle={{
                     paddingBottom: 100,
-                }} /**/
+                    paddingTop: props.headerHeight
+                }}
+                scrollIndicatorInsets={{top: props.headerHeight}}
                 showsVerticalScrollIndicator={!(Platform.OS === "android")}
                 data={locales}
                 removeClippedSubviews
@@ -376,6 +401,7 @@ const SearchResults = React.memo((props: SearchResultsProps) => {
                         />
                     );
                 }}
+                
             />
         </>
     );

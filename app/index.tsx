@@ -6,7 +6,7 @@ import useDatabase from "@/hooks/useDatabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { useFocusEffect } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import MapView from "react-native-maps";
@@ -30,7 +30,7 @@ export default function Map() {
 
     const mapRef = useRef<MapView>(null);
     // @ts-ignore
-    const markerRefs = useRef<Marker>({});
+    const markerRefs = useRef<Record<string, Marker | null>>({});
 
     //Loads data from db
     useEffect(() => {
@@ -45,6 +45,22 @@ export default function Map() {
             }
         }
     }, [loading]);
+
+    //Marker ref factory
+    const createMarkerRef = useCallback(
+        (id: string) => {
+            //@ts-ignore
+            return (ref: Marker | null) => {
+                if (!markerRefs || !markerRefs.current) return;
+                if (ref) {
+                    markerRefs.current[id] = ref;
+                } else {
+                    delete markerRefs.current[id];
+                }
+            };
+        },
+        [markerRefs]
+    );
 
     //Determines centers near location
     const determineNearbyCenters = (
@@ -231,18 +247,7 @@ export default function Map() {
                         <CenterMarker
                             key={center["BPHC Assigned Number"]}
                             center={center}
-                            ref={(ref: any) => {
-                                if (ref) {
-                                    //@ts-ignore
-                                    markerRefs.current[
-                                        center["BPHC Assigned Number"]
-                                    ] = ref;
-                                } else {
-                                    delete markerRefs.current[
-                                        center["BPHC Assigned Number"]
-                                    ];
-                                }
-                            }}
+                            refFunc={createMarkerRef(center["BPHC Assigned Number"])}
                         />
                     ))}
                 </MapView>
@@ -254,12 +259,13 @@ export default function Map() {
                             setSearchingCenters={setSearchingCenters}
                             setDisplayCenters={setDisplayCenters}
                             currentCenter={currentCenter}
-                            setCurrentCenter={setCurrentCenter} 
+                            setCurrentCenter={setCurrentCenter}
                             displayCenters={displayCenters}
-                            unit={unit} 
-                            searching={loading || searchingCenters} 
-                            markerRefs={markerRefs} 
-                            mapRef={mapRef}                        />
+                            unit={unit}
+                            searching={loading || searchingCenters}
+                            markerRefs={markerRefs}
+                            mapRef={mapRef}
+                        />
                     }
                     header={
                         <DraggableHeader

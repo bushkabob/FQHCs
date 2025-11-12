@@ -180,7 +180,6 @@ const FixedDraggable: React.FC<FixedDraggableProps> = (props: FixedDraggableProp
                         <Animated.View style={[styles.background, backgroundViewFade, {backgroundColor: background2}]} />
                             <GestureDetector gesture={pan}>
                                 <View style={{width: "100%", height: "100%", alignItems: "center" }} >
-                                    <DraggableHandle />
                                     {cloneElement(props.content as any, { setViewHeight: updateHeight })}
                                 </View>
                             </GestureDetector>
@@ -189,10 +188,12 @@ const FixedDraggable: React.FC<FixedDraggableProps> = (props: FixedDraggableProp
     );
 };
 
-const DraggableHandle = () => {
+export const DraggableHandle = () => {
     const themeGray = useThemeColor({}, "tabIconDefault")
     return (
-        <View style={[styles.handle, {backgroundColor: themeGray}]} />
+        <View style={{width: "100%", alignItems: "center"}} >
+            <View style={[styles.handle, {backgroundColor: themeGray}]} />
+        </View>
     )
 }
 
@@ -202,6 +203,7 @@ const styles = StyleSheet.create({
         right: 0,
         left: 0,
         zIndex: 100,
+        borderRadius: 40,
         overflow: "hidden"
     },
     background: {
@@ -224,15 +226,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         marginBottom: 18,
         gap: 10,
-    },
-
-    inputBox: {
-        flexDirection: "row",
-        alignItems: "center",
-        height: 40,
-        paddingHorizontal: 12,
-        backgroundColor: "rgba(255,255,255,0.15)",
-        borderRadius: 40,
     },
     header: {
         width: "100%",

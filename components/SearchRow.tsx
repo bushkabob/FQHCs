@@ -3,7 +3,7 @@ import { HeightUpdateFunction } from "@/types/types";
 import { Ionicons } from "@expo/vector-icons";
 import SegmentedControl from "@react-native-segmented-control/segmented-control";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 interface SearchRowProps {
@@ -12,13 +12,23 @@ interface SearchRowProps {
     setViewHeight?: HeightUpdateFunction;
     searchArea: string
     setSearchArea: Function
+    setSearchActive: Function
+    searchActive: boolean
 }
 
 const SearchRow = (props: SearchRowProps) => {
     const searchBackground = useThemeColor({}, "background");
     const textColor = useThemeColor({}, "text");
     const textFieldRef = useRef<TextInput>(null);
-    const [searchActive, setSearchActive] = useState<boolean>(false);
+
+    useEffect(() => {
+        // props.setHeaderHeight(searchActive ? 82 + 50 : 82)
+        console.log(props.searchActive)
+    }, [props.searchActive])
+
+    useEffect(() => {
+        console.log("mounted")
+    }, [])
 
     return (
         <View style={styles.header} >
@@ -58,19 +68,19 @@ const SearchRow = (props: SearchRowProps) => {
                                 flex: 1,
                             }}
                             onFocus={() => {
-                                props.setViewHeight &&
-                                    props.setViewHeight(1.0, 300);
-                                setSearchActive(true);
+                                (props.setViewHeight &&
+                                    props.setViewHeight(1.0, 300));
+                                props.setSearchActive(true);
                             }}
                         />
                     </GlassView>
                 </Pressable>
-                {searchActive && (
+                {props.searchActive && (
                     <Pressable
                         onPress={() => {
                             props.setViewHeight &&
                                 props.setViewHeight(0.0, 300);
-                            setSearchActive(false);
+                            props.setSearchActive(false);
                         }}
                     >
                         <GlassView
@@ -94,17 +104,19 @@ const SearchRow = (props: SearchRowProps) => {
                     </Pressable>
                 )}
             </View>
-            {searchActive && (
-                <SegmentedControl
-                    onChange={() =>
-                        props.setSearchArea((val: string) =>
-                            val === "All" ? "Nearby" : "All"
-                        )
-                    }
-                    values={["Search Current Area", "Search All"]}
-                    selectedIndex={props.searchArea === "Nearby" ? 0 : 1}
-                    style={{ width: "100%" }}
-                />
+            {props.searchActive && (
+                <View style={{marginBottom: 20}} >
+                    <SegmentedControl
+                        onChange={() =>
+                            props.setSearchArea((val: string) =>
+                                val === "All" ? "Nearby" : "All"
+                            )
+                        }
+                        values={["Search Current Area", "Search All"]}
+                        selectedIndex={props.searchArea === "Nearby" ? 0 : 1}
+                        style={{ width: "100%" }}
+                    />
+                </View>
             )}
         </View>
     );
@@ -117,6 +129,7 @@ const styles = StyleSheet.create({
     },
     search: {
         flex: 1,
+        paddingBottom: 20
     },
     searchBar: {
         flexDirection: "row",
@@ -129,7 +142,6 @@ const styles = StyleSheet.create({
     },
     header: {
         marginHorizontal: 20,
-        gap: 20
     }
 });
 
